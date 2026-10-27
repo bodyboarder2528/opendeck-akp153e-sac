@@ -1,6 +1,6 @@
 {
   "saver": {
-    "minutes": 10,
+    "minutes": 0,
     "file": "builtin:starfield"
   },
   "dim": {

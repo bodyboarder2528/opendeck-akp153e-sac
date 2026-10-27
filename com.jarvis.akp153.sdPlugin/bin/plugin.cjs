@@ -27,7 +27,7 @@ const BRIDGE = path.join(__dirname, "bridge.cs");
 const BRIDGE_CMD = `Add-Type -ReferencedAssemblies System.Drawing -Path '${BRIDGE.replace(/'/g, "''")}'; exit [Akp]::Run()`;
 const CONFIG_FILE = path.join(process.env.APPDATA || os.homedir(), "opendeck", "jarvis-akp153.json");
 const DEFAULTS = {
-  saver: { minutes: 10, file: "builtin:starfield" },             // minutes 0 = off; file = a GIF/picture path
+  saver: { minutes: 0, file: "builtin:starfield" },              // minutes 0 = off (default: see README known issue); file = a GIF/picture path
   dim: { percent: 20, workNightsFrom: "21:00", otherNightsFrom: "23:00", until: "05:00" },   // work nights = Sun-Thu evenings
   alerts: { position: 5, everySeconds: 60, failuresBeforeAlert: 2, checks: [] },   // checks: { name, ping } or { name, http }
 };
@@ -46,7 +46,7 @@ function toBridge(line) { if (bridge && deviceId) bridge.stdin.write(line + "\n"
 // ---------- settings ----------
 function loadConfig() {
   try {
-    const user = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+    const user = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8").replace(/^\uFEFF/, ""));   // Windows PowerShell writes a BOM
     config = {};
     for (const k of Object.keys(DEFAULTS)) config[k] = { ...DEFAULTS[k], ...(user[k] || {}) };
     log(`settings loaded from ${CONFIG_FILE}`);

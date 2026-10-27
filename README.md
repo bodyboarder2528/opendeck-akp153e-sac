@@ -2,6 +2,10 @@
 
 An [OpenDeck](https://github.com/nekename/OpenDeck) device plugin for the **AJAZZ AKP153E (rev. 2)** stream deck on Windows.
 
+> **Made with AI.** This plugin was written by an AI (Anthropic's Claude), working for the repo owner, who directed it and tested it on his own deck. It works on that one AKP153E rev. 2. Nobody else has reviewed it, and the code has no automated tests. It's small (two files in `bin/`), so read it before you run it. Use it at your own risk.
+
+> **Known issue: leave the screensaver off for now.** Animating the tall side screen for more than about 2 minutes made the deck stop responding until it was unplugged and plugged back in (it happened three times). The screensaver is **off by default** in this version. Don't turn it on (`saver.minutes` in the settings file) until this is fixed. Static pages, GIF keys, alerts and dimming are fine.
+
 The usual plugin, [opendeck-akp153](https://github.com/4ndv/opendeck-akp153), ships an unsigned `.exe`. With Windows 11 **Smart App Control** on, Windows can block that file (you'll see *"Part of this app has been blocked… opendeck-akp153-win.exe"*), and then the deck stays dark. Smart App Control has no per-app exceptions, and once it's off you can only turn it back on by resetting Windows.
 
 This plugin does the same job using only programs Windows already trusts:
@@ -32,7 +36,7 @@ Nothing unsigned runs, so Smart App Control has nothing to block. It uses the sa
 1. Close OpenDeck. It keeps running in the system tray; if it won't quit, run `taskkill /IM opendeck.exe /T /F`.
 2. Open `%APPDATA%\opendeck\plugins`. **Move** the folder `st.lynx.plugins.opendeck-akp153.sdPlugin` somewhere else, for example your Desktop. Don't delete it, so you can switch back. Two plugins can't both drive device namespace 99.
 3. Copy this repo's `com.jarvis.akp153.sdPlugin` folder into `%APPDATA%\opendeck\plugins`.
-4. Optional: copy `jarvis-akp153.example.json` to `%APPDATA%\opendeck\jarvis-akp153.json` and edit it. Without that file you get a 10-minute screensaver, night dimming and no alerts. The plugin re-reads the file within about 5 seconds whenever it changes.
+4. Optional: copy `jarvis-akp153.example.json` to `%APPDATA%\opendeck\jarvis-akp153.json` and edit it. Without that file you get night dimming only: no screensaver, no alerts. The plugin re-reads the file within about 5 seconds whenever it changes.
 5. Start OpenDeck. The deck should light up with your pages within a few seconds.
 
 **To switch back:** close OpenDeck, delete `com.jarvis.akp153.sdPlugin`, and move the original folder back.
