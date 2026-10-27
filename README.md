@@ -20,7 +20,6 @@ Nothing unsigned runs, so Smart App Control has nothing to block. It uses the sa
 | **Screensaver** | After N idle minutes, one picture or GIF covers the whole deck, side screen included. The default is a built-in twinkling night sky. The first press only wakes the deck; it doesn't trigger that key. |
 | **Alerts** | Pings or HTTP checks on your own machines. When one fails twice in a row, the top of the side screen flashes red with its name until it's back. |
 | **Night dimming** | Caps the brightness overnight. Sunday–Thursday evenings can start earlier than Friday–Saturday. |
-| **SC Inventory Tracker** action | For [sc-inventory-tracker](https://github.com/Aurelius-Draco/sc-inventory-tracker) users: shows ON/OFF plus the item count, and a press starts the tracker. |
 
 ## Requirements
 
@@ -43,7 +42,6 @@ Nothing unsigned runs, so Smart App Control has nothing to block. It uses the sa
 - `saver.minutes`: idle minutes before the screensaver starts (`0` turns it off). `saver.file` is a GIF or picture path, or `builtin:starfield`.
 - `dim`: `percent` is the night brightness cap. `workNightsFrom` applies to Sunday–Thursday evenings and `otherNightsFrom` to Friday–Saturday; both run `until` the morning time.
 - `alerts.checks`: a list of `{ "name": "NAS", "ping": "192.168.1.10" }` or `{ "name": "HA", "http": "http://host:port" }`. Any HTTP answer counts as up, and self-signed certificates are fine. `position` is the side-screen tile the alert uses (5 = top).
-- `tracker.folder`: where sc-inventory-tracker is installed.
 
 Logs: `%LOCALAPPDATA%\OpenDeck\logs\plugins\com.jarvis.akp153.sdPlugin.log`.
 

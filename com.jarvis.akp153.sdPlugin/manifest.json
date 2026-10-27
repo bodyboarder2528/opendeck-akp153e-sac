@@ -2,13 +2,22 @@
   "SDKVersion": 2,
   "Author": "bodyboarder2528",
   "CodePath": "bin/plugin.cjs",
-  "Description": "Device support for the AJAZZ AKP153E (rev. 2) using only signed code (Node + PowerShell + Windows' hid.dll), because Smart App Control blocks the original opendeck-akp153 plugin's exe. Adds animated GIF keys, a whole-deck screensaver, homelab alert flashes, night dimming and a live SC Inventory Tracker key.",
+  "Description": "Device support for the AJAZZ AKP153E (rev. 2) using only signed code (Node + PowerShell + Windows' hid.dll), because Smart App Control blocks the original opendeck-akp153 plugin's exe. Adds animated GIF keys, a whole-deck screensaver, homelab alert flashes and night dimming.",
   "Name": "Jarvis AKP153E",
   "Icon": "imgs/icon",
   "Version": "1.1.0",
-  "Software": { "MinimumVersion": "6.5" },
-  "Nodejs": { "Version": "22" },
-  "OS": [{ "Platform": "windows", "MinimumVersion": "10" }],
+  "Software": {
+    "MinimumVersion": "6.5"
+  },
+  "Nodejs": {
+    "Version": "22"
+  },
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
   "Category": "Jarvis AKP153E",
   "CategoryIcon": "imgs/icon",
   "DeviceNamespace": "99",
@@ -19,18 +28,16 @@
       "Icon": "imgs/gif",
       "Tooltip": "Plays a GIF on this key (AKP153E only). Set the file in the settings.",
       "PropertyInspectorPath": "pi/gif.html",
-      "Controllers": ["Keypad"],
+      "Controllers": [
+        "Keypad"
+      ],
       "SupportedInMultiActions": false,
-      "States": [{ "Image": "imgs/gif", "ShowTitle": false }]
-    },
-    {
-      "UUID": "com.jarvis.akp153.tracker",
-      "Name": "SC Inventory Tracker",
-      "Icon": "imgs/tracker",
-      "Tooltip": "Shows if the SC Inventory Tracker is running and how many items it knows. Press to start it.",
-      "Controllers": ["Keypad"],
-      "SupportedInMultiActions": false,
-      "States": [{ "Image": "imgs/tracker", "ShowTitle": true, "TitleAlignment": "bottom", "FontSize": 13 }]
+      "States": [
+        {
+          "Image": "imgs/gif",
+          "ShowTitle": false
+        }
+      ]
     }
   ]
 }

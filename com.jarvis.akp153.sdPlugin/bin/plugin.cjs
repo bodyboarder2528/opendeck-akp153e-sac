@@ -10,7 +10,6 @@
 //   - screensaver: one picture/GIF across all 15 buttons after N idle minutes; the waking press is swallowed
 //   - alerts: pings / HTTP checks; when one fails twice in a row a key flashes red until it's back
 //   - night dimming: caps brightness overnight (work nights start earlier)
-//   - "SC Inventory Tracker" action: shows ON/OFF + item count, press starts the tracker
 const { spawn, execFile } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -31,7 +30,6 @@ const DEFAULTS = {
   saver: { minutes: 10, file: "builtin:starfield" },             // minutes 0 = off; file = a GIF/picture path
   dim: { percent: 20, workNightsFrom: "21:00", otherNightsFrom: "23:00", until: "05:00" },   // work nights = Sun-Thu evenings
   alerts: { position: 5, everySeconds: 60, failuresBeforeAlert: 2, checks: [] },   // checks: { name, ping } or { name, http }
-  tracker: { folder: path.join(os.homedir(), "SC-Inventory-Tracker") },
 };
 
 let ws, bridge = null, deviceId = null, flushTimer = null, stopping = false, noDevLogged = false;
@@ -40,7 +38,6 @@ let userBrightness = 50, sentBrightness = null;
 let lastActivity = Date.now(), saverOn = false, swallowKey = null;
 let alertText = null;
 const gifs = new Map();       // action context -> { pos, file }
-const trackers = new Map();   // action context -> true
 
 function log(msg) { console.log(`${new Date().toLocaleString("en-AU")} ${msg}`); }
 function send(msg) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
@@ -182,36 +179,6 @@ async function runChecks() {
 setInterval(runChecks, Math.max(15, config.alerts.everySeconds) * 1000);
 setTimeout(runChecks, 10000);
 
-// ---------- SC Inventory Tracker key ----------
-function trackerStatus() {
-  return new Promise((res) => {
-    const ps = "@(Get-CimInstance Win32_Process -Filter 'Name like ''python%''' | Where-Object { $_.CommandLine -match 'tracker\\.py' -and $_.CommandLine -notmatch '--(dashboard|export|scan-screenshots)' }).Count";
-    execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", ps], { windowsHide: true, timeout: 15000 }, (err, stdout) => {
-      let items = null;
-      try { items = JSON.parse(fs.readFileSync(path.join(config.tracker.folder, "data", "inventory.json"), "utf8")).items.length; } catch { }
-      res({ running: !err && Number(stdout.trim()) > 0, items });
-    });
-  });
-}
-async function refreshTrackers() {
-  if (trackers.size === 0) return;
-  const s = await trackerStatus();
-  const title = `${s.running ? "ON" : "OFF"}${s.items != null ? " " + s.items : ""}`;
-  for (const context of trackers.keys()) send({ event: "setTitle", context, payload: { title, target: 0 } });
-}
-setInterval(refreshTrackers, 15000);
-async function trackerPressed(context) {
-  const s = await trackerStatus();
-  if (!s.running) {
-    const bat = path.join(config.tracker.folder, "launchers", "tracker.bat");
-    if (!fs.existsSync(bat)) { send({ event: "showAlert", context }); return; }
-    spawn("cmd.exe", ["/c", `start "" "${bat}"`], { cwd: config.tracker.folder, detached: true, stdio: "ignore", windowsVerbatimArguments: true }).unref();
-    log("started SC Inventory Tracker");
-  }
-  send({ event: "showOk", context });
-  setTimeout(refreshTrackers, 4000);
-}
-
 // ---------- OpenDeck ----------
 ws = new WebSocket(`ws://127.0.0.1:${args.port}`);
 ws.onopen = () => { send({ event: args.registerEvent, uuid: args.pluginUUID }); startBridge(); };
@@ -249,18 +216,11 @@ ws.onmessage = (m) => {
         gifs.set(e.context, { pos, file });
         if (file && (!old || old.file !== file || e.event === "willAppear")) toBridge(`ANIM ${pos} ${file}`);
         else if (!file && old && old.file) toBridge(`ANIMOFF ${pos}`);
-      } else if (e.action === "com.jarvis.akp153.tracker") {
-        trackers.set(e.context, true);
-        refreshTrackers();
       }
       break;
     }
     case "willDisappear":
       if (gifs.has(e.context)) { const g = gifs.get(e.context); gifs.delete(e.context); if (g.file) toBridge(`ANIMOFF ${g.pos}`); }
-      trackers.delete(e.context);
-      break;
-    case "keyDown":
-      if (e.action === "com.jarvis.akp153.tracker") trackerPressed(e.context);
       break;
   }
 };

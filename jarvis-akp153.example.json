@@ -1,14 +1,27 @@
 {
-  "saver": { "minutes": 10, "file": "builtin:starfield" },
-  "dim": { "percent": 20, "workNightsFrom": "21:00", "otherNightsFrom": "23:00", "until": "05:00" },
+  "saver": {
+    "minutes": 10,
+    "file": "builtin:starfield"
+  },
+  "dim": {
+    "percent": 20,
+    "workNightsFrom": "21:00",
+    "otherNightsFrom": "23:00",
+    "until": "05:00"
+  },
   "alerts": {
     "position": 5,
     "everySeconds": 60,
     "failuresBeforeAlert": 2,
     "checks": [
-      { "name": "NAS", "ping": "192.168.1.10" },
-      { "name": "HA", "http": "http://192.168.1.20:8123" }
+      {
+        "name": "NAS",
+        "ping": "192.168.1.10"
+      },
+      {
+        "name": "HA",
+        "http": "http://192.168.1.20:8123"
+      }
     ]
-  },
-  "tracker": { "folder": "C:\\Users\\you\\SC-Inventory-Tracker" }
+  }
 }
