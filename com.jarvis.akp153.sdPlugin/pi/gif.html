@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { background: #2d2d2d; color: #d8d8d8; font: 13px "Segoe UI", sans-serif; margin: 0; padding: 10px 12px; }
+  label { display: block; margin-bottom: 4px; }
+  input { width: 100%; box-sizing: border-box; background: #3d3d3d; color: #fff; border: 1px solid #555; border-radius: 3px; padding: 5px 6px; font: inherit; }
+  p { color: #9a9a9a; font-size: 12px; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+  <label for="file">GIF or picture file</label>
+  <input id="file" type="text" placeholder="C:\path\to\animation.gif" spellcheck="false">
+  <p>Full path on this PC. Animated GIFs play on the key (up to 300 frames, 20 fps max); any other picture just shows.</p>
+<script>
+  // Stream Deck-style property inspector: OpenDeck calls this with the socket details.
+  let ws, uuid;
+  window.connectElgatoStreamDeckSocket = (port, inUUID, registerEvent, info, actionInfo) => {
+    uuid = inUUID;
+    const settings = (JSON.parse(actionInfo).payload || {}).settings || {};
+    document.getElementById("file").value = settings.file || "";
+    ws = new WebSocket("ws://127.0.0.1:" + port);
+    ws.onopen = () => ws.send(JSON.stringify({ event: registerEvent, uuid }));
+  };
+  document.getElementById("file").addEventListener("change", (e) => {
+    const file = e.target.value.trim().replace(/^"(.*)"$/, "$1");   // allow a pasted "quoted path"
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ event: "setSettings", context: uuid, payload: { file } }));
+  });
+</script>
+</body>
+</html>
