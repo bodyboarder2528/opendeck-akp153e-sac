@@ -10,6 +10,9 @@
 //   - screensaver: one picture/GIF across all 15 buttons after N idle minutes; the waking press is swallowed
 //   - alerts: pings / HTTP checks; when one fails twice in a row a key flashes red until it's back
 //   - night dimming: caps brightness overnight (work nights start earlier)
+//   - "System monitor" action: CPU %, RAM % and GPU temperature, live
+//   - "Audio output" action: shows the current playback device, press switches to the next one (audio.cs)
+//   - device.maxKBps / heartbeatSeconds: write throttle + keep-alive (see bridge.cs Throttle), so the deck can't be flooded
 const { spawn, execFile } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -27,17 +30,22 @@ const BRIDGE = path.join(__dirname, "bridge.cs");
 const BRIDGE_CMD = `Add-Type -ReferencedAssemblies System.Drawing -Path '${BRIDGE.replace(/'/g, "''")}'; exit [Akp]::Run()`;
 const CONFIG_FILE = path.join(process.env.APPDATA || os.homedir(), "opendeck", "jarvis-akp153.json");
 const DEFAULTS = {
-  saver: { minutes: 0, file: "builtin:starfield" },              // minutes 0 = off (default: see README known issue); file = a GIF/picture path
+  saver: { minutes: 0, file: "builtin:starfield", area: "deck" },     // minutes 0 = off; file = a GIF/picture path; area "deck", "side" or "both" (side GIF + shadow keys)
   dim: { percent: 20, workNightsFrom: "21:00", otherNightsFrom: "23:00", until: "05:00" },   // work nights = Sun-Thu evenings
   alerts: { position: 5, everySeconds: 60, failuresBeforeAlert: 2, checks: [] },   // checks: { name, ping } or { name, http }
+  // ~200 KB/s sustained locked the deck in ~2 min; ~40 KB/s ran all night (28-10-2026). Burst = a page change.
+  device: { maxKBps: 48, burstKB: 160, heartbeatSeconds: 10 },
+  audio: { cycle: "" },   // '|'-separated name words to switch between (e.g. "Headphones|Speakers"); empty = every output
 };
 
 let ws, bridge = null, deviceId = null, flushTimer = null, stopping = false, noDevLogged = false;
 let config = DEFAULTS;
 let userBrightness = 50, sentBrightness = null;
-let lastActivity = Date.now(), saverOn = false, swallowKey = null;
+let lastActivity = Date.now(), saverOn = false, saverArea = "deck", swallowKey = null;
 let alertText = null;
 const gifs = new Map();       // action context -> { pos, file }
+const monitors = new Set();   // System monitor action contexts
+const audioKeys = new Set();  // Audio output action contexts
 
 function log(msg) { console.log(`${new Date().toLocaleString("en-AU")} ${msg}`); }
 function send(msg) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
@@ -46,7 +54,7 @@ function toBridge(line) { if (bridge && deviceId) bridge.stdin.write(line + "\n"
 // ---------- settings ----------
 function loadConfig() {
   try {
-    const user = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8").replace(/^\uFEFF/, ""));   // Windows PowerShell writes a BOM
+    const user = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8").replace(/^﻿/, ""));   // Windows PowerShell writes a BOM
     config = {};
     for (const k of Object.keys(DEFAULTS)) config[k] = { ...DEFAULTS[k], ...(user[k] || {}) };
     log(`settings loaded from ${CONFIG_FILE}`);
@@ -56,7 +64,13 @@ function loadConfig() {
   }
 }
 loadConfig();
-fs.watchFile(CONFIG_FILE, { interval: 5000 }, () => { loadConfig(); applyBrightness(); runChecks(); });
+fs.watchFile(CONFIG_FILE, { interval: 5000 }, () => { loadConfig(); applyBrightness(); runChecks(); sendDeviceLimits(); });
+
+function sendDeviceLimits() {
+  const d = config.device;
+  toBridge(`RATE ${Math.round(d.maxKBps * 1000)} ${Math.round(d.burstKB * 1000)}`);
+  toBridge(`HEARTBEAT ${d.heartbeatSeconds}`);
+}
 
 // ---------- device ----------
 // Images arrive in bursts on a page change: commit (STP) once things go quiet for 50 ms, like the original
@@ -78,7 +92,8 @@ function startBridge() {
       send({ event: "deregisterDevice", payload: deviceId });
       deviceId = null;
     }
-    setTimeout(startBridge, code === 2 ? 5000 : 3000);   // 2 = deck not plugged in: keep looking
+    // 2 = deck not plugged in: keep looking; 4 = deck locked up: it stays dead until it's replugged, so look less often
+    setTimeout(startBridge, code === 2 ? 5000 : code === 4 ? 15000 : 3000);
   });
 }
 
@@ -90,11 +105,14 @@ function onBridgeLine(line) {
     sentBrightness = null; saverOn = false; lastActivity = Date.now();
     log(`deck open, registering ${deviceId}`);
     send({ event: "registerDevice", payload: { id: deviceId, name: "Ajazz AKP153E (rev. 2)", rows: 3, columns: 6, encoders: 0, type: 0 } });
+    sendDeviceLimits();
     if (alertText) toBridge(`ALERT ${config.alerts.position} ${alertText}`);
   } else if (kind === "KEY" && deviceId) {
     onKey(Number(a), b === "1");
   } else if (kind === "GONE") {
     log(`bridge: ${line}`);
+    // A stuck write may never return, so don't wait for the bridge to exit by itself
+    if (a === "stuck:" && bridge) { const b2 = bridge; setTimeout(() => { try { b2.kill(); } catch { } }, 1000); }
   } else if (kind === "LOADED") {
     log(`loaded ${a} (${b} frames)`);
   } else if (kind === "NODEV" && !noDevLogged) {
@@ -105,10 +123,11 @@ function onBridgeLine(line) {
 
 function onKey(pos, down) {
   lastActivity = Date.now();
-  if (saverOn && down) {               // first press only wakes the deck
-    saverOn = false; swallowKey = pos;
+  if (saverOn && down) {
+    saverOn = false;
     toBridge("SAVEROFF");
-    return;
+    // whole-deck screensaver: the first press only wakes the deck; side-only: the buttons were showing, so it counts
+    if (saverArea !== "side") { swallowKey = pos; return; }
   }
   if (swallowKey === pos) { if (!down) swallowKey = null; return; }
   send({ event: down ? "keyDown" : "keyUp", payload: { device: deviceId, position: pos } });
@@ -119,9 +138,11 @@ setInterval(() => {
   const s = config.saver;
   if (!deviceId || saverOn || !s.minutes || !s.file) return;
   if (Date.now() - lastActivity >= s.minutes * 60000) {
-    saverOn = true;
-    log(`screensaver on (${s.file})`);
-    toBridge(`SAVER ${s.file}`);
+    saverOn = true; saverArea = s.area;
+    // area "both" (v1.3): the GIF on the side screen + the built-in "shadow" keys (clock, ARISE, eyes)
+    const cmd = s.area === "side" ? "SIDESAVER" : s.area === "both" ? "SHADOWSAVER" : "SAVER";
+    log(`screensaver on (${s.area === "side" ? "side screen" : s.area === "both" ? "side screen + shadow keys" : "whole deck"}: ${s.file})`);
+    toBridge(`${cmd} ${s.file}`);
   }
 }, 15000);
 
@@ -179,6 +200,57 @@ async function runChecks() {
 setInterval(runChecks, Math.max(15, config.alerts.everySeconds) * 1000);
 setTimeout(runChecks, 10000);
 
+// ---------- System monitor key ----------
+// CPU from Node's own counters, RAM from the OS, GPU temperature from nvidia-smi (NVIDIA-signed). Every 2 s,
+// so it costs about one key image every 2 s, well inside the throttle.
+let cpuPrev = null, gpuTemp = null;
+function cpuPercent() {
+  const now = os.cpus().reduce((a, c) => {
+    const t = c.times; a.idle += t.idle; a.total += t.user + t.nice + t.sys + t.idle + t.irq; return a;
+  }, { idle: 0, total: 0 });
+  const prev = cpuPrev; cpuPrev = now;
+  if (!prev || now.total === prev.total) return null;
+  return Math.round(100 * (1 - (now.idle - prev.idle) / (now.total - prev.total)));
+}
+function readGpu() {
+  execFile("nvidia-smi", ["--query-gpu=temperature.gpu", "--format=csv,noheader"], { windowsHide: true, timeout: 5000 },
+    (err, stdout) => { gpuTemp = err ? null : parseInt(stdout, 10); });
+}
+setInterval(() => {
+  if (monitors.size === 0) { cpuPrev = null; return; }
+  const cpu = cpuPercent();
+  const ram = Math.round(100 * (1 - os.freemem() / os.totalmem()));
+  const title = `CPU ${cpu == null ? "--" : cpu}%\nRAM ${ram}%\nGPU ${Number.isFinite(gpuTemp) ? gpuTemp + "C" : "--"}`;
+  for (const context of monitors) send({ event: "setTitle", context, payload: { title, target: 0 } });
+}, 2000);
+setInterval(() => { if (monitors.size) readGpu(); }, 5000);
+
+// ---------- Audio output key ----------
+const AUDIO = path.join(__dirname, "audio.cs");
+function audioCmd(cmd, arg = "") {
+  const ps = `Add-Type -Path '${AUDIO.replace(/'/g, "''")}'; exit [JarvisAudio]::Run('${cmd}', '${String(arg).replace(/'/g, "''")}')`;
+  return new Promise((res) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", ps],
+    { windowsHide: true, timeout: 20000 }, (err, stdout) => res(err ? null : stdout.trim())));
+}
+// "Speakers (Realtek(R) Audio)" -> "Speakers"; the headset's two channels keep their Game/Chat tag
+function shortName(name) {
+  if (!name) return "?";
+  const tag = /- (Game|Chat)\)$/.exec(name);
+  return name.split(" (")[0] + (tag ? `\n${tag[1]}` : "");
+}
+async function refreshAudio() {
+  if (audioKeys.size === 0) return;
+  const title = shortName(await audioCmd("current"));
+  for (const context of audioKeys) send({ event: "setTitle", context, payload: { title, target: 0 } });
+}
+setInterval(refreshAudio, 30000);
+async function audioPressed(context) {
+  const name = await audioCmd("next", config.audio.cycle || "");
+  if (!name || name === "none") { send({ event: "showAlert", context }); return; }
+  log(`audio output -> ${name}`);
+  for (const c of audioKeys) send({ event: "setTitle", context: c, payload: { title: shortName(name), target: 0 } });
+}
+
 // ---------- OpenDeck ----------
 ws = new WebSocket(`ws://127.0.0.1:${args.port}`);
 ws.onopen = () => { send({ event: args.registerEvent, uuid: args.pluginUUID }); startBridge(); };
@@ -216,11 +288,22 @@ ws.onmessage = (m) => {
         gifs.set(e.context, { pos, file });
         if (file && (!old || old.file !== file || e.event === "willAppear")) toBridge(`ANIM ${pos} ${file}`);
         else if (!file && old && old.file) toBridge(`ANIMOFF ${pos}`);
+      } else if (e.action === "com.jarvis.akp153.sysmon") {
+        monitors.add(e.context);
+        readGpu();
+      } else if (e.action === "com.jarvis.akp153.audio") {
+        audioKeys.add(e.context);
+        refreshAudio();
       }
       break;
     }
     case "willDisappear":
       if (gifs.has(e.context)) { const g = gifs.get(e.context); gifs.delete(e.context); if (g.file) toBridge(`ANIMOFF ${g.pos}`); }
+      monitors.delete(e.context);
+      audioKeys.delete(e.context);
+      break;
+    case "keyDown":
+      if (e.action === "com.jarvis.akp153.audio") audioPressed(e.context);
       break;
   }
 };

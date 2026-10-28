@@ -2,10 +2,10 @@
   "SDKVersion": 2,
   "Author": "bodyboarder2528",
   "CodePath": "bin/plugin.cjs",
-  "Description": "Device support for the AJAZZ AKP153E (rev. 2) using only signed code (Node + PowerShell + Windows' hid.dll), because Smart App Control blocks the original opendeck-akp153 plugin's exe. Adds animated GIF keys, a whole-deck screensaver, homelab alert flashes and night dimming.",
+  "Description": "Device support for the AJAZZ AKP153E (rev. 2) using only signed code (Node + PowerShell + Windows' hid.dll), because Smart App Control blocks the original opendeck-akp153 plugin's exe. Adds animated GIF keys, a whole-deck screensaver, homelab alert flashes, night dimming, a system monitor key, an audio output switcher, and the fix for the sustained-animation lock-up (key images capped at 3 KB, as the official app does).",
   "Name": "Jarvis AKP153E",
   "Icon": "imgs/icon",
-  "Version": "1.1.0",
+  "Version": "1.3.0",
   "Software": {
     "MinimumVersion": "6.5"
   },
@@ -36,6 +36,42 @@
         {
           "Image": "imgs/gif",
           "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.jarvis.akp153.sysmon",
+      "Name": "System monitor",
+      "Icon": "imgs/sysmon",
+      "Tooltip": "Live CPU %, RAM % and GPU temperature.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "imgs/sysmon-key",
+          "ShowTitle": true,
+          "TitleAlignment": "middle",
+          "FontSize": 13
+        }
+      ]
+    },
+    {
+      "UUID": "com.jarvis.akp153.audio",
+      "Name": "Audio output",
+      "Icon": "imgs/audio",
+      "Tooltip": "Shows the current playback device. Press to switch to the next one (set which ones in jarvis-akp153.json, audio.cycle).",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "imgs/audio-key",
+          "ShowTitle": true,
+          "TitleAlignment": "bottom",
+          "FontSize": 12
         }
       ]
     }

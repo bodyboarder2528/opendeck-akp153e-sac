@@ -1,7 +1,11 @@
 {
   "saver": {
     "minutes": 0,
-    "file": "builtin:starfield"
+    "file": "builtin:starfield",
+    "area": "deck"
+  },
+  "device": {
+    "maxKBps": 3000
   },
   "dim": {
     "percent": 20,
